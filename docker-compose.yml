@@ -1,0 +1,29 @@
+services:
+  #######################################
+  # otel-collector
+  # Agent OpenTelemetry Collector pour instrumenter les containers et la machine hôte
+  otel-collector:
+    container_name: otel-collector
+    image: otel/opentelemetry-collector-contrib:latest
+    restart: unless-stopped
+    mem_limit: ${MEM_LIMIT}
+    memswap_limit: ${MEM_LIMIT}
+    cpus: ${CPU_LIMIT}
+    group_add:
+      - ${OTEL_DOCKER_GROUP_ID}
+    volumes:
+      - ./volumes/otel-collector/config.yaml:/etc/otelcol-contrib/config.yaml:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /:/hostfs:ro
+    environment:
+      #####################
+      ### OpenTelemetry ###
+      #####################
+      OTELCOL_HOST_FILESYSTEM: "/hostfs"
+      OTEL_EXPORTER_OTLP_ENDPOINT_GRPC: ${OTEL_EXPORTER_OTLP_ENDPOINT_GRPC}
+      # Environnement (dev, test, prod)
+      OTEL_ENVIRONMENT: "${OTEL_ENVIRONMENT}"
+      OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER}
+      OTEL_LOGS_EXPORTER: ${OTEL_LOGS_EXPORTER}
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER}
+      HOSTNAME: ${HOSTNAME}

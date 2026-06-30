@@ -1,0 +1,80 @@
+# Configuration des récepteurs de métriques
+receivers:
+  # Utilisation du récepteur standard docker_stats pour collecter les métriques Docker
+  docker_stats:
+    api_version: "1.54"
+    env_vars_to_metric_labels:
+      # Extrait la version spécifique à chaque conteneur
+      OTEL_VERSION: service.version
+      # Extrait le nom logique du service configuré dans le conteneur
+      OTEL_SERVICE_NAME: service.name
+      # Extrait le profil Spring actif si présent (utile pour les API et batchs)
+      SPRING_PROFILES_ACTIVE: spring.profiles.active
+      # Extrait le namespace de l'application à partir des variables d'environnement du Docker Compose
+      OTEL_NAMESPACE: service.namespace
+    container_labels_to_metric_labels:
+      # Extrait le nom du service Docker Compose
+      com.docker.compose.service: compose.service
+      # Extrait le nom du projet Docker Compose
+      com.docker.compose.project: compose.project
+  host_metrics:
+    collection_interval: 30s
+    scrapers:
+      cpu:
+      memory:
+      disk:
+      network:
+
+# Configuration des processeurs pour transformer les données collectées
+processors:
+  # Utilisation du processeur standard resource pour mapper les attributs de ressources
+  resource/containers:
+    attributes:
+      # Map le service.name sur le nom du conteneur Docker inspecté
+      - key: service.name
+        from_attribute: container.name
+        action: upsert
+      # Ajout de l'environnement de déploiement à partir des variables d'environnement du Docker Compose
+      - key: deployment.environment
+        value: ${OTEL_ENVIRONMENT}
+        action: upsert
+      # Ajout du nom de l'hôte physique à partir des variables d'environnement du Docker Compose
+      - key: host.name
+        value: ${HOSTNAME}
+        action: upsert
+  # Utilisation du processeur standard resource pour définir les attributs de la machine hôte
+  resource/host:
+    attributes:
+      - key: service.name
+        value: ${HOSTNAME}
+        action: upsert
+      - key: deployment.environment
+        value: ${OTEL_ENVIRONMENT}
+        action: upsert
+      - key: service.namespace
+        value: ${HOSTNAME}
+        action: upsert
+      - key: host.name
+        value: ${HOSTNAME}
+        action: upsert
+
+  # Processeur de batching standard pour regrouper les métriques et optimiser les exports
+  batch:
+
+exporters:
+  otlp:
+    endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT_GRPC}
+    tls:
+      insecure: true
+
+# Définition des pipelines de collecte de télémétrie
+service:
+  pipelines:
+    metrics/containers:
+      receivers: [docker_stats]
+      processors: [resource/containers, batch]
+      exporters: [otlp]
+    metrics/host:
+      receivers: [host_metrics]
+      processors: [resource/host, batch]
+      exporters: [otlp]
